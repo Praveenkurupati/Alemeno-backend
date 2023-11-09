@@ -1,108 +1,99 @@
-const excel = require('exceljs');
-const db = require('../Db_connection/config')
+// controllers/uploadController.js
 
+const multer = require('multer');
+const ExcelJS = require('exceljs');
+const { Customer } = require('../Db_Schemas/Db_Schemas');
 
-exports.insertCustomerData = (req, res) => {
-    const workbook = new excel.Workbook();
-    workbook.xlsx.readFile(req.file.path) // Use the path of the uploaded file
-      .then(() => {
-        const worksheet = workbook.getWorksheet(1);
-        const insertPromises = [];
-  
-        worksheet.eachRow((row, rowNumber) => {
-          if (rowNumber > 1) {
-            const customer = {
-              first_name: row.getCell(2).value,
-              last_name: row.getCell(3).value,
-              phone_number: row.getCell(4).value,
-              monthly_salary: row.getCell(5).value,
-              approved_limit: row.getCell(6).value,
-              current_debt: row.getCell(7).value,
-            };
-  
-            const insertQuery = {
-              text: 'INSERT INTO customers (first_name, last_name, phone_number, monthly_salary, approved_limit, current_debt) VALUES ($1, $2, $3, $4, $5, $6)',
-              values: [
-                customer.first_name,
-                customer.last_name,
-                customer.phone_number,
-                customer.monthly_salary,
-                customer.approved_limit,
-                customer.current_debt,
-              ],
-            };
-  
-            insertPromises.push(db.query(insertQuery));
-          }
-        });
-  
-        Promise.all(insertPromises)
-          .then(() => {
-            res.status(200).json({ message: 'Customer data uploaded successfully' });
-          })
-          .catch((err) => {
-            res.status(500).json({ message: 'An error occurred while inserting data into the database' });
-          });
-      })
-      .catch((err) => {
-        res.status(500).json({ message: 'An error occurred while processing the Excel file' });
+// Configure Multer for file uploads
+const upload = multer({ dest: 'uploads/' }); // Set your upload directory
+
+exports.uploadCustomers = upload.single('customerFile', (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  const fileBuffer = req.file.buffer;
+  console.log(fileBuffer)
+
+  workbook.xlsx.load(fileBuffer).then((workbook) => {
+    const worksheet = workbook.getWorksheet(1); // Assuming data is on the first worksheet
+
+    const data = [];
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        // Skip the header row
+        return;
+      }
+
+      const values = row.values;
+      data.push({
+        customer_id: values[1],
+        first_name: values[2],
+        last_name: values[3],
+        age: values[4],
+        phone_number: values[5],
+        monthly_salary: values[6],
+        approved_limit: values[7],
       });
-  };
+    });
 
-
-
-exports.ingestLoanData = (req, res) => {
-    const workbook = new excel.Workbook();
-    workbook.xlsx.readFile(req.file.path) // Use the path of the uploaded file
+    // Process the data and insert it into the database
+    Customer.bulkCreate(data)
       .then(() => {
-        const worksheet = workbook.getWorksheet(1);
-        const insertPromises = [];
-  
-        worksheet.eachRow((row, rowNumber) => {
-          if (rowNumber > 1) {
-            const loan = {
-              customer_id: row.getCell(1).value,
-              loan_id: row.getCell(2).value,
-              loan_amount: row.getCell(3).value,
-              tenure: row.getCell(4).value,
-              interest_rate: row.getCell(5).value,
-              monthly_repayment: row.getCell(6).value,
-              emis_paid_on_time: row.getCell(7).value,
-              start_date: row.getCell(8).value,
-              end_date: row.getCell(9).value,
-            };
-  
-            const insertQuery = {
-              text: 'INSERT INTO loans (customer_id, loan_id, loan_amount, tenure, interest_rate, monthly_repayment, emis_paid_on_time, start_date, end_date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-              values: [
-                loan.customer_id,
-                loan.loan_id,
-                loan.loan_amount,
-                loan.tenure,
-                loan.interest_rate,
-                loan.monthly_repayment,
-                loan.emis_paid_on_time,
-                loan.start_date,
-                loan.end_date,
-              ],
-            };
-  
-            insertPromises.push(db.query(insertQuery));
-          }
-        });
-  
-        Promise.all(insertPromises)
-          .then(() => {
-            res.status(200).json({ message: 'Loan data ingested successfully' });
-          })
-          .catch((err) => {
-            res.status(500).json({ message: 'An error occurred while ingesting data into the database' });
-          });
+        res.status(200).json({ message: 'Data uploaded successfully' });
       })
-      .catch((err) => {
-        res.status(500).json({ message: 'An error occurred while processing the Excel file' });
+      .catch((error) => {
+        console.error(error);
+        res.status(500).json({ message: 'Error uploading data' });
       });
-  };
-  
+  });
+});
 
 
+
+exports.uploadLoans = upload.single('loanFile', (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  const fileBuffer = req.file.buffer;
+
+  workbook.xlsx.load(fileBuffer).then((workbook) => {
+    const worksheet = workbook.getWorksheet(1); // Assuming data is on the first worksheet
+
+    const data = [];
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        // Skip the header row
+        return;
+      }
+
+      const values = row.values;
+      data.push({
+        customer_id: values[1],
+        loan_id: values[2],
+        loan_amount: values[3],
+        tenure: values[4],
+        interest_rate: values[5],
+        monthly_payment: values[6],
+        EMIs_paid_on_Time: values[7],
+        start_date: new Date(values[8]),
+        end_date: new Date(values[9]),
+      });
+    });
+
+    // Process the data and insert it into the database
+    Loan.bulkCreate(data)
+      .then(() => {
+        res.status(200).json({ message: 'Loan data uploaded successfully' });
+      })
+      .catch((error) => {
+        console.error(error);
+        res.status(500).json({ message: 'Error uploading loan data' });
+      });
+  });
+});

@@ -13,7 +13,7 @@ const customerRoutes = require('./Routes/customerRoutes')
 const loanRoutes = require('./Routes/loanRoutes')
 const UploadFileRoutes = require('./Routes/UploadFileRoutes')
 
-app.use('/',UploadFileRoutes)
+app.use('/api',UploadFileRoutes)
 app.use('/',customerRoutes)
 app.use('/',loanRoutes)
 
